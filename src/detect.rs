@@ -28,7 +28,7 @@ pub enum DetectionSource {
     Marker,
 }
 
-#[derive(ToSchema, Serialize, Debug)]
+#[derive(ToSchema, Serialize)]
 pub struct CurrentVersion {
     /// mcjars type id, e.g. `PAPER`.
     pub server_type: String,
@@ -105,7 +105,7 @@ async fn jar_sha256(client: &WingsClient, server: uuid::Uuid, jar: &str) -> Opti
         .ok()?
         .fingerprints
         .into_values()
-        .map(|hash| hash.to_ascii_lowercase())
+        .map(|hash| hash.as_str().to_ascii_lowercase())
         .find(|hash| hash.len() == 64 && hash.bytes().all(|byte| byte.is_ascii_hexdigit()))
 }
 
@@ -176,8 +176,8 @@ mod tests {
     #[test]
     fn markers_of_both_extensions_parse() {
         let ours: Marker = serde_json::from_str(
-            r#"{"type":"PAPER","version":"1.21.1","buildId":298600,"buildName":"#142",
-            "installedAt":"2026-10-02T10:00:00+00:00","installer":"dev.caloptreyx.versionchanger"}"#,
+            r##"{"type":"PAPER","version":"1.21.1","buildId":298600,"buildName":"#142",
+            "installedAt":"2026-10-02T10:00:00+00:00","installer":"dev.caloptreyx.versionchanger"}"##,
         )
         .unwrap();
         assert_eq!(ours.server_type.as_deref(), Some("PAPER"));
