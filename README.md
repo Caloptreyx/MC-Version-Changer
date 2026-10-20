@@ -4,7 +4,7 @@ A [Calagopus Panel](https://calagopus.com) extension that switches a Minecraft s
 type, version and build listed on [mcjars](https://mcjars.app) (Paper, Purpur, Folia, Fabric,
 Quilt, Forge, NeoForge, Velocity, BungeeCord, Sponge, Mohist, Arclight, Leaf and more).
 
-Package name: `dev.caloptreyx.versionchanger` · Requires panel `>=1.2.3`
+Package name: `dev.caloptreyx.versionchanger` · Requires panel `>=1.2.6`
 
 ## Features
 

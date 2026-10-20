@@ -111,6 +111,12 @@ def download(url, destination, expected_size, on_chunk):
                     out.write(chunk)
                     written += len(chunk)
                     on_chunk(len(chunk))
+                # urllib ends the read without an error when the connection drops early; unless the server
+                # compressed the body anyway, Content-Length is the file's size, so a short file is retried
+                encoded = response.headers.get("Content-Encoding", "identity").lower() != "identity"
+                announced = response.headers.get("Content-Length", "")
+                if not encoded and announced.isdigit() and written != int(announced):
+                    raise ConnectionError(f"connection closed after {written} of {announced} bytes")
             if expected_size and written != expected_size:
                 log(f"note: {host} sent {written} bytes, mcjars listed {expected_size}")
             return
