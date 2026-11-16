@@ -73,7 +73,7 @@ the server locks into the *installing* state, the console shows live progress an
 ## Development
 
 The repository uses the root-crate layout (`Cargo.toml`, `src/`) next to `frontend/`. Every push
-runs the shared Caloptreyx extension check (typecheck, Biome, frontend build and
+runs the shared Caloptreyx extension check (typecheck, the panel's oxlint and oxfmt check, frontend build and
 `cargo test -p dev_caloptreyx_versionchanger` inside a panel checkout).
 
 The install script also runs on its own: set `MVC_ROOT=/tmp/x`, `MVC_BUILD` (the JSON built by

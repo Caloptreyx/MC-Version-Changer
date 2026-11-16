@@ -10,12 +10,12 @@ import TextInput from '@/elements/input/TextInput.tsx';
 import SegmentedControl from '@/elements/layout/SegmentedControl.tsx';
 import Text from '@/elements/typography/Text.tsx';
 import { useServerStore } from '@/stores/server.ts';
-import TypeIcon from '../../components/TypeIcon.tsx';
 import type { Overview, ServerType } from '../../lib/schemas.ts';
+import type { InstallTarget } from './InstallVersionModal.tsx';
+import TypeIcon from '../../components/TypeIcon.tsx';
 import { matchesFilter, type TypeFilter, typeFilters, usesProjectVersions } from '../../lib/types.ts';
 import { useExtTranslations } from '../../translations.ts';
 import CurrentVersionCard from './CurrentVersionCard.tsx';
-import type { InstallTarget } from './InstallVersionModal.tsx';
 
 interface Props {
   overview: Overview;

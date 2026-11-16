@@ -18,13 +18,13 @@ import { useServerCan } from '@/plugins/usePermissions.ts';
 import { useToast } from '@/providers/ToastProvider.tsx';
 import { useTranslations } from '@/providers/TranslationProvider.tsx';
 import { useServerStore } from '@/stores/server.ts';
+import type { BuildSummary, InstallMode, Overview, ServerType } from '../../lib/schemas.ts';
 import getBuilds from '../../api/server/getBuilds.ts';
 import getVersions from '../../api/server/getVersions.ts';
 import installVersion from '../../api/server/installVersion.ts';
 import TypeIcon from '../../components/TypeIcon.tsx';
 import { javaMismatch, recommendedImage } from '../../lib/java.ts';
 import { versionChangerQueryKeys } from '../../lib/queryKeys.ts';
-import type { BuildSummary, InstallMode, Overview, ServerType } from '../../lib/schemas.ts';
 import { compareReleases, parseMcjarsDate } from '../../lib/types.ts';
 import { useExtTranslations } from '../../translations.ts';
 

@@ -10,10 +10,10 @@ import Switch from '@/elements/input/Switch.tsx';
 import TextInput from '@/elements/input/TextInput.tsx';
 import { useAdminCan } from '@/plugins/usePermissions.ts';
 import { useToast } from '@/providers/ToastProvider.tsx';
+import type { AdminSettings } from '../../lib/schemas.ts';
 import getSettings from '../../api/admin/getSettings.ts';
 import updateSettings from '../../api/admin/updateSettings.ts';
 import { versionChangerQueryKeys } from '../../lib/queryKeys.ts';
-import type { AdminSettings } from '../../lib/schemas.ts';
 import { useExtTranslations } from '../../translations.ts';
 
 export default function AdminConfigurationPage() {

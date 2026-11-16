@@ -17,12 +17,12 @@ import Anchor from '@/elements/typography/Anchor.tsx';
 import Text from '@/elements/typography/Text.tsx';
 import { useServerCan } from '@/plugins/usePermissions.ts';
 import { useServerStore } from '@/stores/server.ts';
+import type { Overview, ServerType, VersionSummary } from '../../lib/schemas.ts';
+import type { InstallTarget } from './InstallVersionModal.tsx';
 import getVersions from '../../api/server/getVersions.ts';
 import TypeIcon from '../../components/TypeIcon.tsx';
 import { versionChangerQueryKeys } from '../../lib/queryKeys.ts';
-import type { Overview, ServerType, VersionSummary } from '../../lib/schemas.ts';
 import { useExtTranslations } from '../../translations.ts';
-import type { InstallTarget } from './InstallVersionModal.tsx';
 
 interface Props {
   overview: Overview;
