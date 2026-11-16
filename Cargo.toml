@@ -23,7 +23,8 @@ indexmap = { workspace = true }
 uuid = { workspace = true }
 tokio = { workspace = true }
 regex = { workspace = true }
-url = { workspace = true }
+# panel 1.2.10 dropped `url` from its workspace dependencies; 2.5 is in every panel's lockfile
+url = "2.5"
 
 [dev-dependencies]
 rmp-serde = { workspace = true }
