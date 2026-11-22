@@ -48,6 +48,20 @@ the server locks into the *installing* state, the console shows live progress an
   [MC Version Chooser](https://github.com/Regrave/mc-version-chooser), which the Modpack and Mod
   Installer extensions read to detect the loader.
 
+## Screenshots
+
+**Version Changer page**: every server type on mcjars, with the currently installed version on top.
+
+![Server types grid with the current version card](docs/screenshots/server-types.png)
+
+**Versions**: each version of a type with the Java release it needs and its latest build.
+
+![Fabric versions grid](docs/screenshots/versions.png)
+
+**Install modal**: build, install mode, docker image and warnings before the reinstall.
+
+![Install Fabric 1.21.4 modal](docs/screenshots/install-modal.png)
+
 ## Permissions
 
 | Permission | Allows |
