@@ -20,9 +20,12 @@ Package name: `dev.caloptreyx.versionchanger` · Requires panel `>=1.2.10`
 - **Java selection**: mcjars lists the Java release each version needs. The modal recommends
   the egg docker image that provides it and can switch to it (needs `startup.docker-image`).
 - **Current version card**: shows what the server runs, identified by looking the server jar up on
-  mcjars by SHA-256 (works for Forge/NeoForge too). When the jar is unknown, the
-  `.mcvc-type.json` marker is used. A newer build of the same version is offered as a one-click
-  update.
+  mcjars by SHA-256. Forge (1.17+) and NeoForge servers start a launcher stub jar that identifies
+  nothing, so their loader and Minecraft version are read from `unix_args.txt` (or the one `run.sh`
+  starts) and looked up on mcjars by version. Otherwise the `.mcvc-type.json` marker is used; a jar
+  none of these identify (custom or modified builds) shows as unknown. When mcjars cannot be reached
+  or rate limits the panel, the card says so instead. A newer build of the same version is offered
+  as a one-click update.
 
 ### Installation
 

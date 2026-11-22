@@ -70,7 +70,7 @@ export const currentVersionSchema = z.object({
   version: z.string().nullable(),
   buildId: z.number().nullable(),
   buildName: z.string().nullable(),
-  source: z.enum(['jar', 'marker']),
+  source: z.enum(['jar', 'args', 'marker']),
   installedAt: z.string().nullable(),
   update: latestBuildSchema.nullable(),
 });
@@ -79,6 +79,7 @@ export type CurrentVersion = z.infer<typeof currentVersionSchema>;
 
 export const overviewSchema = z.object({
   current: currentVersionSchema.nullable(),
+  lookupFailed: z.boolean(),
   jarFile: z.string(),
   allowCleanInstall: z.boolean(),
   dockerImages: z.array(dockerImageSchema),
