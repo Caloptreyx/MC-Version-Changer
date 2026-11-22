@@ -144,8 +144,24 @@ async fn jar_sha256(client: &WingsClient, server: uuid::Uuid, jar: &str) -> Opti
 /// The words of a launch arguments file or start script, without `#` comments, so a
 /// commented-out command cannot name the loader.
 fn active_tokens(text: &str) -> impl Iterator<Item = &str> {
-    text.lines()
-        .flat_map(|line| line.split_whitespace().take_while(|token| !token.starts_with('#')))
+    text.lines().flat_map(|line| strip_comment(line).split_whitespace())
+}
+
+/// Cuts a line at a shell comment: a `#` starting a word outside quotes.
+fn strip_comment(line: &str) -> &str {
+    let mut quote = None;
+    let mut word_start = true;
+    for (index, char) in line.char_indices() {
+        match (quote, char) {
+            (None, '#') if word_start => return &line[..index],
+            (None, '"' | '\'') => quote = Some(char),
+            (Some(open), _) if char == open => quote = None,
+            _ => {}
+        }
+        word_start = quote.is_none() && char.is_whitespace();
+    }
+
+    line
 }
 
 /// Reads the loader from Forge/NeoForge launch arguments: the `--fml.*` options of
@@ -388,6 +404,9 @@ mod tests {
         let commented = "# java -jar forge-1.20.4-49.0.1-shim.jar\n\
             java -Xmx4G -jar forge-1.21.10-60.1.0-shim.jar nogui # was forge-1.21.9-59.0.1-shim.jar\n";
         assert_eq!(parse_loader_args(commented), loader("FORGE", "1.21.10", "60.1.0"));
+
+        let quoted = "java -Dmotd=\"Server #1\" -Dname='a #b' -jar forge-1.21.10-60.1.0-shim.jar\n";
+        assert_eq!(parse_loader_args(quoted), loader("FORGE", "1.21.10", "60.1.0"));
 
         assert_eq!(parse_loader_args("java -Xmx2G -jar server.jar nogui"), None);
         assert_eq!(parse_loader_args("--fml.forgeVersion ../x --fml.mcVersion 1.20.1"), None);
