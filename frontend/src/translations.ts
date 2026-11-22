@@ -84,6 +84,7 @@ const translations = defineTranslations({
                 'Replaces the server jar ({jar}). Worlds, plugins, mods and configuration files stay.',
               wipeDescription: '**Deletes every file on the server**, including worlds, before installing.',
               wipeDisabled: 'Clean installs have been disabled by an administrator.',
+              wipeNoPermission: 'Clean installs need the permission to reinstall the server.',
             },
             dockerImage: 'Docker image',
             dockerImageDescription: '{type} {version} needs Java {java}.',

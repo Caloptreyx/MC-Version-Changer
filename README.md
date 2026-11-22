@@ -4,7 +4,7 @@ A [Calagopus Panel](https://calagopus.com) extension that switches a Minecraft s
 type, version and build listed on [mcjars](https://mcjars.app) (Paper, Purpur, Folia, Fabric,
 Quilt, Forge, NeoForge, Velocity, BungeeCord, Sponge, Mohist, Arclight, Leaf and more).
 
-Package name: `dev.caloptreyx.versionchanger` · Requires panel `>=1.2.6`
+Package name: `dev.caloptreyx.versionchanger` · Requires panel `>=1.2.10`
 
 ## Features
 
@@ -53,6 +53,9 @@ the server locks into the *installing* state, the console shows live progress an
 | `version-changer.install` (server) | Installing a build (reinstalls the server) |
 | `version-changer.read` (admin) | Viewing the extension settings |
 | `version-changer.manage` (admin) | Changing the extension settings |
+
+A clean install also needs the core `settings.install` permission, and starting the server when the
+installation finishes needs `control.start`, as with the panel's own Reinstall.
 
 ## Admin settings
 

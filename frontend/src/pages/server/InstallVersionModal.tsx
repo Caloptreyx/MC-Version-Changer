@@ -60,6 +60,9 @@ export default function InstallVersionModal({ target, onClose, overview, types }
   const queryClient = useQueryClient();
   const { server, updateServer } = useServerStore();
   const canChangeImagePermission = useServerCan('startup.docker-image');
+  // Core permissions the extension's own permission doesn't replace.
+  const canWipe = useServerCan('settings.install');
+  const canStart = useServerCan('control.start');
 
   const [buildId, setBuildId] = useState<number | null>(null);
   const [mode, setMode] = useState<InstallMode>('replace');
@@ -280,16 +283,20 @@ export default function InstallVersionModal({ target, onClose, overview, types }
               {
                 value: 'wipe',
                 label: tExt('pages.server.versionChanger.install.modes.wipe', {}),
-                disabled: !overview.allowCleanInstall,
+                disabled: !overview.allowCleanInstall || !canWipe,
               },
             ]}
           />
           <Text size='xs' c={mode === 'wipe' ? 'red' : 'dimmed'} component='div'>
             {mode === 'wipe'
               ? tExt('pages.server.versionChanger.install.modes.wipeDescription', {}).md()
-              : overview.allowCleanInstall
+              : overview.allowCleanInstall && canWipe
                 ? tExt('pages.server.versionChanger.install.modes.replaceDescription', { jar: overview.jarFile })
-                : `${tExt('pages.server.versionChanger.install.modes.replaceDescription', { jar: overview.jarFile })} ${tExt('pages.server.versionChanger.install.modes.wipeDisabled', {})}`}
+                : `${tExt('pages.server.versionChanger.install.modes.replaceDescription', { jar: overview.jarFile })} ${
+                    overview.allowCleanInstall
+                      ? tExt('pages.server.versionChanger.install.modes.wipeNoPermission', {})
+                      : tExt('pages.server.versionChanger.install.modes.wipeDisabled', {})
+                  }`}
           </Text>
         </Stack>
 
@@ -322,11 +329,13 @@ export default function InstallVersionModal({ target, onClose, overview, types }
               label={tExt('pages.server.versionChanger.install.acceptEula', {}).md()}
             />
           )}
-          <Checkbox
-            checked={startOnCompletion}
-            onChange={(event) => setStartOnCompletion(event.currentTarget.checked)}
-            label={tExt('pages.server.versionChanger.install.startOnCompletion', {})}
-          />
+          {canStart && (
+            <Checkbox
+              checked={startOnCompletion}
+              onChange={(event) => setStartOnCompletion(event.currentTarget.checked)}
+              label={tExt('pages.server.versionChanger.install.startOnCompletion', {})}
+            />
+          )}
         </Stack>
 
         {(typeChanged || downgrade || build?.experimental || imageMismatch || build?.installable === false) && (

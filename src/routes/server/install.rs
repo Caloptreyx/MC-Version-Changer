@@ -20,6 +20,19 @@ mod post {
     };
     use utoipa::ToSchema;
 
+    /// Core permissions an install needs besides `version-changer.install`, matching the core
+    /// reinstall route: the extension's permission never stands in for a core one.
+    fn core_permissions(mode: InstallMode, start_on_completion: bool) -> Vec<&'static str> {
+        let mut permissions = Vec::new();
+        if mode == InstallMode::Wipe {
+            permissions.push("settings.install");
+        }
+        if start_on_completion {
+            permissions.push("control.start");
+        }
+        permissions
+    }
+
     #[derive(ToSchema, Validate, Deserialize)]
     pub struct Payload {
         /// mcjars server type, e.g. `PAPER`.
@@ -83,6 +96,9 @@ mod post {
         }
 
         permissions.has_server_permission("version-changer.install")?;
+        for permission in core_permissions(data.mode, data.start_on_completion) {
+            permissions.has_server_permission(permission)?;
+        }
 
         if server.status.is_some() {
             return ApiResponse::error("the server is already installing or restoring a backup")
@@ -199,6 +215,22 @@ mod post {
                 .ok()
         })
         .await?
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::{InstallMode, core_permissions};
+
+        #[test]
+        fn clean_install_and_start_need_core_permissions() {
+            assert!(core_permissions(InstallMode::Replace, false).is_empty());
+            assert_eq!(core_permissions(InstallMode::Wipe, false), ["settings.install"]);
+            assert_eq!(core_permissions(InstallMode::Replace, true), ["control.start"]);
+            assert_eq!(
+                core_permissions(InstallMode::Wipe, true),
+                ["settings.install", "control.start"]
+            );
+        }
     }
 }
 
