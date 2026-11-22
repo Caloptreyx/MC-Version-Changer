@@ -54,8 +54,10 @@ the server locks into the *installing* state, the console shows live progress an
 | `version-changer.read` (admin) | Viewing the extension settings |
 | `version-changer.manage` (admin) | Changing the extension settings |
 
-A clean install also needs the core `settings.install` permission, and starting the server when the
-installation finishes needs `control.start`, as with the panel's own Reinstall.
+Every install also needs the core `settings.install` permission, since it runs the server's install
+container as the panel's own Reinstall does. Keeping worlds & settings additionally needs
+`files.create` and `files.delete`, because it overwrites the jar and deletes the previous install's
+files. Starting the server when the installation finishes needs `control.start`.
 
 ## Admin settings
 

@@ -85,6 +85,8 @@ const translations = defineTranslations({
               wipeDescription: '**Deletes every file on the server**, including worlds, before installing.',
               wipeDisabled: 'Clean installs have been disabled by an administrator.',
               wipeNoPermission: 'Clean installs need the permission to reinstall the server.',
+              replaceNoPermission:
+                'Keeping worlds & settings needs the permissions to reinstall the server and to create and delete files.',
             },
             dockerImage: 'Docker image',
             dockerImageDescription: '{type} {version} needs Java {java}.',

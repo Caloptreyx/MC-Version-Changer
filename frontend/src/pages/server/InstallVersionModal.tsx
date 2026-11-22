@@ -60,8 +60,10 @@ export default function InstallVersionModal({ target, onClose, overview, types }
   const queryClient = useQueryClient();
   const { server, updateServer } = useServerStore();
   const canChangeImagePermission = useServerCan('startup.docker-image');
-  // Core permissions the extension's own permission doesn't replace.
+  // Core permissions the extension's own permission doesn't replace. Both modes run the server's
+  // install container; keeping worlds also overwrites and deletes files.
   const canWipe = useServerCan('settings.install');
+  const canReplace = useServerCan(['settings.install', 'files.create', 'files.delete'], false);
   const canStart = useServerCan('control.start');
 
   const [buildId, setBuildId] = useState<number | null>(null);
@@ -279,7 +281,11 @@ export default function InstallVersionModal({ target, onClose, overview, types }
             value={mode}
             onChange={(value) => setMode(value as InstallMode)}
             data={[
-              { value: 'replace', label: tExt('pages.server.versionChanger.install.modes.replace', {}) },
+              {
+                value: 'replace',
+                label: tExt('pages.server.versionChanger.install.modes.replace', {}),
+                disabled: !canReplace,
+              },
               {
                 value: 'wipe',
                 label: tExt('pages.server.versionChanger.install.modes.wipe', {}),
@@ -290,13 +296,15 @@ export default function InstallVersionModal({ target, onClose, overview, types }
           <Text size='xs' c={mode === 'wipe' ? 'red' : 'dimmed'} component='div'>
             {mode === 'wipe'
               ? tExt('pages.server.versionChanger.install.modes.wipeDescription', {}).md()
-              : overview.allowCleanInstall && canWipe
-                ? tExt('pages.server.versionChanger.install.modes.replaceDescription', { jar: overview.jarFile })
-                : `${tExt('pages.server.versionChanger.install.modes.replaceDescription', { jar: overview.jarFile })} ${
-                    overview.allowCleanInstall
-                      ? tExt('pages.server.versionChanger.install.modes.wipeNoPermission', {})
-                      : tExt('pages.server.versionChanger.install.modes.wipeDisabled', {})
-                  }`}
+              : [
+                  tExt('pages.server.versionChanger.install.modes.replaceDescription', { jar: overview.jarFile }),
+                  !canReplace && tExt('pages.server.versionChanger.install.modes.replaceNoPermission', {}),
+                  !overview.allowCleanInstall
+                    ? tExt('pages.server.versionChanger.install.modes.wipeDisabled', {})
+                    : !canWipe && tExt('pages.server.versionChanger.install.modes.wipeNoPermission', {}),
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
           </Text>
         </Stack>
 
@@ -385,7 +393,7 @@ export default function InstallVersionModal({ target, onClose, overview, types }
             color={mode === 'wipe' ? 'red' : 'blue'}
             leftSection={<FontAwesomeIcon icon={faDownload} />}
             loading={loading || builds.isLoading}
-            disabled={!build || !build.installable}
+            disabled={!build || !build.installable || (mode === 'wipe' ? !canWipe : !canReplace)}
             onClick={doInstall}
           >
             {tExt('pages.server.versionChanger.install.submit', {})}

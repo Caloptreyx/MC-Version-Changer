@@ -21,11 +21,13 @@ mod post {
     use utoipa::ToSchema;
 
     /// Core permissions an install needs besides `version-changer.install`, matching the core
-    /// reinstall route: the extension's permission never stands in for a core one.
+    /// routes: the extension's permission never stands in for a core one. Both modes run the
+    /// server's install container, which core's Reinstall guards. Keeping worlds still overwrites
+    /// the jar and deletes what the previous install left, which core's file routes guard.
     fn core_permissions(mode: InstallMode, start_on_completion: bool) -> Vec<&'static str> {
-        let mut permissions = Vec::new();
-        if mode == InstallMode::Wipe {
-            permissions.push("settings.install");
+        let mut permissions = vec!["settings.install"];
+        if mode == InstallMode::Replace {
+            permissions.extend(["files.create", "files.delete"]);
         }
         if start_on_completion {
             permissions.push("control.start");
@@ -222,10 +224,16 @@ mod post {
         use super::{InstallMode, core_permissions};
 
         #[test]
-        fn clean_install_and_start_need_core_permissions() {
-            assert!(core_permissions(InstallMode::Replace, false).is_empty());
+        fn every_install_mode_and_start_need_core_permissions() {
+            assert_eq!(
+                core_permissions(InstallMode::Replace, false),
+                ["settings.install", "files.create", "files.delete"]
+            );
             assert_eq!(core_permissions(InstallMode::Wipe, false), ["settings.install"]);
-            assert_eq!(core_permissions(InstallMode::Replace, true), ["control.start"]);
+            assert_eq!(
+                core_permissions(InstallMode::Replace, true),
+                ["settings.install", "files.create", "files.delete", "control.start"]
+            );
             assert_eq!(
                 core_permissions(InstallMode::Wipe, true),
                 ["settings.install", "control.start"]
