@@ -24,7 +24,7 @@ pub const MARKER_FILE: &str = ".mcvc-type.json";
 const MAX_MARKER_SIZE: u64 = 64 * 1024;
 pub const DEFAULT_JARFILE: &str = "server.jar";
 /// Files holding Forge/NeoForge launch arguments, in the order the eggs prefer them.
-const ARGS_FILES: [&str; 2] = ["unix_args.txt", "run.sh"];
+const ARGS_FILES: [(&str, Syntax); 2] = [("unix_args.txt", Syntax::ArgFile), ("run.sh", Syntax::Shell)];
 const MAX_ARGS_SIZE: u64 = 256 * 1024;
 
 /// `forge-<minecraft>-<forge>-shim.jar`, which Forge 1.20.3+ starts instead of `--fml.*` options.
@@ -141,24 +141,43 @@ async fn jar_sha256(client: &WingsClient, server: uuid::Uuid, jar: &str) -> Opti
         .find(|hash| hash.len() == 64 && hash.bytes().all(|byte| byte.is_ascii_hexdigit()))
 }
 
-/// The words of a launch arguments file or start script, without `#` comments, so a
-/// commented-out command cannot name the loader.
-fn active_tokens(text: &str) -> impl Iterator<Item = &str> {
-    text.lines().flat_map(|line| strip_comment(line).split_whitespace())
+/// How a file marks comments.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Syntax {
+    /// A Java `@argfile` (`unix_args.txt`): any unquoted `#` starts a comment.
+    ArgFile,
+    /// A shell script (`run.sh`): an unquoted `#` starts a comment only at the start of a word.
+    Shell,
 }
 
-/// Cuts a line at a shell comment: a `#` starting a word outside quotes.
-fn strip_comment(line: &str) -> &str {
+/// The words of a launch arguments file or start script, without comments, so a
+/// commented-out command cannot name the loader.
+fn active_tokens(text: &str, syntax: Syntax) -> impl Iterator<Item = &str> {
+    text.lines()
+        .flat_map(move |line| strip_comment(line, syntax).split_whitespace())
+}
+
+/// Cuts a line at its comment. Quoted and backslash-escaped `#` stay literal.
+fn strip_comment(line: &str, syntax: Syntax) -> &str {
     let mut quote = None;
+    let mut escaped = false;
     let mut word_start = true;
     for (index, char) in line.char_indices() {
-        match (quote, char) {
-            (None, '#') if word_start => return &line[..index],
-            (None, '"' | '\'') => quote = Some(char),
-            (Some(open), _) if char == open => quote = None,
-            _ => {}
+        let literal = escaped;
+        if escaped {
+            escaped = false;
+        } else {
+            match (quote, char) {
+                (None, '#') if word_start || syntax == Syntax::ArgFile => return &line[..index],
+                // Single quotes take backslashes literally in a shell.
+                (Some('\''), '\\') if syntax == Syntax::Shell => {}
+                (_, '\\') => escaped = true,
+                (None, '"' | '\'') => quote = Some(char),
+                (Some(open), _) if char == open => quote = None,
+                _ => {}
+            }
         }
-        word_start = quote.is_none() && char.is_whitespace();
+        word_start = !literal && quote.is_none() && char.is_whitespace();
     }
 
     line
@@ -166,8 +185,8 @@ fn strip_comment(line: &str) -> &str {
 
 /// Reads the loader from Forge/NeoForge launch arguments: the `--fml.*` options of
 /// `unix_args.txt`, or the shim jar Forge 1.20.3+ starts.
-fn parse_loader_args(text: &str) -> Option<LoaderArgs> {
-    let tokens: Vec<&str> = active_tokens(text).collect();
+fn parse_loader_args(text: &str, syntax: Syntax) -> Option<LoaderArgs> {
+    let tokens: Vec<&str> = active_tokens(text, syntax).collect();
     let option = |name: &str| {
         tokens
             .windows(2)
@@ -207,7 +226,7 @@ fn parse_loader_args(text: &str) -> Option<LoaderArgs> {
 
 /// The arguments file a start script passes (`@libraries/.../unix_args.txt` in Forge's `run.sh`).
 fn referenced_args_file(text: &str) -> Option<&str> {
-    active_tokens(text)
+    active_tokens(text, Syntax::Shell)
         .filter_map(|token| token.trim_matches(['"', '\'']).strip_prefix('@'))
         .find(|path| {
             path.starts_with("libraries/") && path.ends_with("/unix_args.txt") && mcjars::safe_relative(path)
@@ -215,12 +234,12 @@ fn referenced_args_file(text: &str) -> Option<&str> {
 }
 
 async fn loader_args(client: &WingsClient, server: uuid::Uuid) -> Option<LoaderArgs> {
-    for file in ARGS_FILES {
+    for (file, syntax) in ARGS_FILES {
         let Some(content) = read_file(client, server, file, MAX_ARGS_SIZE).await else {
             continue;
         };
         let text = String::from_utf8_lossy(&content);
-        if let Some(args) = parse_loader_args(&text) {
+        if let Some(args) = parse_loader_args(&text, syntax) {
             return Some(args);
         }
 
@@ -228,7 +247,7 @@ async fn loader_args(client: &WingsClient, server: uuid::Uuid) -> Option<LoaderA
             continue;
         };
         if let Some(content) = read_file(client, server, referenced, MAX_ARGS_SIZE).await
-            && let Some(args) = parse_loader_args(&String::from_utf8_lossy(&content))
+            && let Some(args) = parse_loader_args(&String::from_utf8_lossy(&content), Syntax::ArgFile)
         {
             return Some(args);
         }
@@ -353,7 +372,7 @@ pub async fn detect(state: &State, settings: &ExtensionSettingsData, server: &Se
 
 #[cfg(test)]
 mod tests {
-    use super::{LoaderArgs, Marker, parse_loader_args, referenced_args_file};
+    use super::{LoaderArgs, Marker, Syntax, parse_loader_args, referenced_args_file};
 
     #[test]
     fn markers_of_both_extensions_parse() {
@@ -387,29 +406,42 @@ mod tests {
             cpw.mods.bootstraplauncher.BootstrapLauncher\n--launchTarget forgeserver\n\
             --fml.neoForgeVersion 21.1.257\n--fml.fmlVersion 4.0.45\n--fml.mcVersion 1.21.1\n\
             --fml.neoFormVersion 20240808.144430\n";
-        assert_eq!(parse_loader_args(neoforge), loader("NEOFORGE", "1.21.1", "21.1.257"));
+        assert_eq!(parse_loader_args(neoforge, Syntax::ArgFile), loader("NEOFORGE", "1.21.1", "21.1.257"));
 
         let forge = "cpw.mods.bootstraplauncher.BootstrapLauncher\n--launchTarget forgeserver\n\
             --fml.forgeVersion 47.3.25\n--fml.mcVersion 1.20.1\n--fml.forgeGroup net.minecraftforge\n\
             --fml.mcpVersion 20230612.114412\n";
-        assert_eq!(parse_loader_args(forge), loader("FORGE", "1.20.1", "47.3.25"));
+        assert_eq!(parse_loader_args(forge, Syntax::ArgFile), loader("FORGE", "1.20.1", "47.3.25"));
 
         let neoforge_1_20_1 = "--launchTarget forgeserver --fml.forgeVersion 47.1.106 --fml.mcVersion 1.20.1 \
             --fml.forgeGroup net.neoforged --fml.mcpVersion 20230612.114412";
-        assert_eq!(parse_loader_args(neoforge_1_20_1), loader("NEOFORGE", "1.20.1", "47.1.106"));
+        assert_eq!(
+            parse_loader_args(neoforge_1_20_1, Syntax::ArgFile),
+            loader("NEOFORGE", "1.20.1", "47.1.106")
+        );
 
         let shim = "-Djava.net.preferIPv6Addresses=system -jar forge-1.21.10-60.1.0-shim.jar\n";
-        assert_eq!(parse_loader_args(shim), loader("FORGE", "1.21.10", "60.1.0"));
+        assert_eq!(parse_loader_args(shim, Syntax::ArgFile), loader("FORGE", "1.21.10", "60.1.0"));
 
         let commented = "# java -jar forge-1.20.4-49.0.1-shim.jar\n\
             java -Xmx4G -jar forge-1.21.10-60.1.0-shim.jar nogui # was forge-1.21.9-59.0.1-shim.jar\n";
-        assert_eq!(parse_loader_args(commented), loader("FORGE", "1.21.10", "60.1.0"));
+        assert_eq!(parse_loader_args(commented, Syntax::Shell), loader("FORGE", "1.21.10", "60.1.0"));
 
-        let quoted = "java -Dmotd=\"Server #1\" -Dname='a #b' -jar forge-1.21.10-60.1.0-shim.jar\n";
-        assert_eq!(parse_loader_args(quoted), loader("FORGE", "1.21.10", "60.1.0"));
+        // Quoted or escaped `#` is literal; in a shell a `#` inside a word is too.
+        let quoted = "java -Dmotd=\"Server \\\" #1\" -Dname='a #b' -Dx=a\\ #c -Dy=b#d \
+            -jar forge-1.21.10-60.1.0-shim.jar\n";
+        assert_eq!(parse_loader_args(quoted, Syntax::Shell), loader("FORGE", "1.21.10", "60.1.0"));
 
-        assert_eq!(parse_loader_args("java -Xmx2G -jar server.jar nogui"), None);
-        assert_eq!(parse_loader_args("--fml.forgeVersion ../x --fml.mcVersion 1.20.1"), None);
+        // Java argument files start a comment at any unquoted `#`, even inside a word.
+        let argfile = "-Dnote=old# --fml.forgeVersion 49.0.1 --fml.mcVersion 1.20.4\n\
+            -Dmotd=\"a #b\"\n--fml.forgeVersion 47.4.2\n--fml.mcVersion 1.20.1\n";
+        assert_eq!(parse_loader_args(argfile, Syntax::ArgFile), loader("FORGE", "1.20.1", "47.4.2"));
+
+        assert_eq!(parse_loader_args("java -Xmx2G -jar server.jar nogui", Syntax::Shell), None);
+        assert_eq!(
+            parse_loader_args("--fml.forgeVersion ../x --fml.mcVersion 1.20.1", Syntax::ArgFile),
+            None
+        );
     }
 
     #[test]
