@@ -199,9 +199,9 @@ pub struct BuildSummary {
     pub changes: Vec<String>,
 }
 
-/// Result of looking a jar up by its hash.
+/// Result of looking a build up on mcjars, by jar hash or by its type and versions.
 #[derive(Serialize, Deserialize, Clone)]
-pub struct JarLookup {
+pub struct BuildLookup {
     pub build: Build,
     pub latest: Build,
 }
@@ -549,19 +549,56 @@ pub async fn lookup_jar(
     state: &State,
     settings: &ExtensionSettingsData,
     sha256: &str,
-) -> Result<Option<JarLookup>, anyhow::Error> {
-    let key = format!("versionchanger::{}::lookup::{sha256}", settings.api_url);
+) -> Result<Option<BuildLookup>, anyhow::Error> {
+    lookup(
+        state,
+        settings,
+        &format!("sha256::{sha256}"),
+        serde_json::json!({ "hash": { "sha256": sha256 } }),
+    )
+    .await
+}
+
+/// Finds the mcjars build of a server type by its Minecraft and project version (Forge and
+/// NeoForge builds are named after their project version). `None` when mcjars has no such build.
+pub async fn lookup_build(
+    state: &State,
+    settings: &ExtensionSettingsData,
+    server_type: &str,
+    minecraft_version: &str,
+    project_version: &str,
+) -> Result<Option<BuildLookup>, anyhow::Error> {
+    if !valid_type(server_type) || !valid_version(minecraft_version) || !valid_version(project_version) {
+        return Ok(None);
+    }
+
+    lookup(
+        state,
+        settings,
+        &format!("build::{server_type}::{minecraft_version}::{project_version}"),
+        serde_json::json!({
+            "type": server_type,
+            "versionId": minecraft_version,
+            "projectVersionId": project_version,
+        }),
+    )
+    .await
+}
+
+async fn lookup(
+    state: &State,
+    settings: &ExtensionSettingsData,
+    key: &str,
+    query: serde_json::Value,
+) -> Result<Option<BuildLookup>, anyhow::Error> {
+    let key = format!("versionchanger::{}::lookup::{key}", settings.api_url);
     state
         .cache
         .cached(&key, LOOKUP_TTL, || async move {
-            let raw: Option<RawLookup> = send(
-                CLIENT
-                    .post(endpoint(settings, &["v2", "build"])?)
-                    .json(&serde_json::json!({ "hash": { "sha256": sha256 } })),
-            )
-            .await?;
+            let raw: Option<RawLookup> =
+                send(CLIENT.post(endpoint(settings, &["v2", "build"])?).json(&query)).await?;
 
-            Ok::<_, anyhow::Error>(raw.map(|raw| JarLookup {
+            Ok::<_, anyhow::Error>(raw.map(|raw| BuildLookup {
                 build: raw.build.into(),
                 latest: raw.latest.into(),
             }))

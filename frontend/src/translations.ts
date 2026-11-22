@@ -15,11 +15,14 @@ const translations = defineTranslations({
             title: 'Currently installed',
             unknown: 'Unknown server version',
             unknownDescription:
-              'The server jar ({jar}) does not match any build on mcjars. Pick a server type below to install one.',
+              'The server jar ({jar}) is missing or not a build mcjars knows, such as a custom or modified jar. Pick a server type below to install one.',
+            lookupFailed:
+              'mcjars could not be reached or is rate limiting the panel, so the version may not be detected. Reload in a minute.',
             build: 'Build {build}',
             installedAt: 'Installed',
             source: {
               jar: 'Identified from {jar}',
+              args: 'Identified from the Forge/NeoForge launch arguments (unix_args.txt)',
               marker: 'Read from .mcvc-type.json',
             },
             updateAvailable: 'Build {build} is available',

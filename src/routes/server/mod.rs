@@ -16,9 +16,13 @@ mod get {
 
     #[derive(ToSchema, Serialize)]
     struct Response {
-        /// What the server runs now, `null` when neither its jar nor a marker identify it.
+        /// What the server runs now, `null` when neither its jar, its Forge/NeoForge launch
+        /// arguments nor a marker identify it.
         #[schema(inline)]
         current: Option<CurrentVersion>,
+        /// mcjars could not be asked (unreachable or rate limited); `current` may be missing or
+        /// less precise until it can.
+        lookup_failed: bool,
         /// The jar the egg starts (`SERVER_JARFILE`).
         jar_file: String,
         allow_clean_install: bool,
@@ -48,7 +52,7 @@ mod get {
 
         let settings = crate::settings::load(&state).await?;
         let jar_file = crate::detect::jar_file(&state, &server).await;
-        let current = crate::detect::detect(&state, &settings, &server, &jar_file).await;
+        let detection = crate::detect::detect(&state, &settings, &server, &jar_file).await;
 
         let image_listed = server.egg.docker_images.values().any(|image| *image == server.image);
         let can_change_image = permissions.has_server_permission("startup.docker-image").is_ok()
@@ -61,7 +65,8 @@ mod get {
                     .allow_overwriting_custom_docker_image);
 
         ApiResponse::new_serialized(Response {
-            current,
+            current: detection.current,
+            lookup_failed: detection.lookup_failed,
             jar_file,
             allow_clean_install: settings.allow_clean_install,
             docker_images: crate::install::docker_images(server.egg.docker_images.iter()),

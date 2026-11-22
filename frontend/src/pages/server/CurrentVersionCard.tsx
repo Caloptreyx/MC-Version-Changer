@@ -36,9 +36,15 @@ export default function CurrentVersionCard({ overview, types, onInstall }: Props
           <TypeIcon url={null} name='?' />
           <Stack gap={2}>
             <Text fw={600}>{tExt('pages.server.versionChanger.current.unknown', {})}</Text>
-            <Text size='sm' c='dimmed'>
-              {tExt('pages.server.versionChanger.current.unknownDescription', { jar: overview.jarFile })}
-            </Text>
+            {overview.lookupFailed ? (
+              <Text size='sm' c='yellow'>
+                {tExt('pages.server.versionChanger.current.lookupFailed', {})}
+              </Text>
+            ) : (
+              <Text size='sm' c='dimmed'>
+                {tExt('pages.server.versionChanger.current.unknownDescription', { jar: overview.jarFile })}
+              </Text>
+            )}
           </Stack>
         </Group>
       </Card>
@@ -84,6 +90,11 @@ export default function CurrentVersionCard({ overview, types, onInstall }: Props
             {current.update && (
               <Text size='sm' c='blue' component='div'>
                 {tExt('pages.server.versionChanger.current.updateAvailable', { build: current.update.name })}
+              </Text>
+            )}
+            {overview.lookupFailed && (
+              <Text size='xs' c='yellow' component='div'>
+                {tExt('pages.server.versionChanger.current.lookupFailed', {})}
               </Text>
             )}
           </Stack>
