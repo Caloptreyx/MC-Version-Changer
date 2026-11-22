@@ -150,48 +150,68 @@ enum Syntax {
     Shell,
 }
 
-/// The words of a launch arguments file or start script, without comments, so a
-/// commented-out command cannot name the loader.
-fn active_tokens(text: &str, syntax: Syntax) -> impl Iterator<Item = &str> {
-    text.lines()
-        .flat_map(move |line| strip_comment(line, syntax).split_whitespace())
-}
-
-/// Cuts a line at its comment. Quoted and backslash-escaped `#` stay literal.
-fn strip_comment(line: &str, syntax: Syntax) -> &str {
-    let mut quote = None;
-    let mut escaped = false;
-    let mut word_start = true;
-    for (index, char) in line.char_indices() {
-        let literal = escaped;
-        if escaped {
-            escaped = false;
-        } else {
+/// The words of a launch arguments file or start script, with quotes and backslash escapes
+/// decoded and comments dropped, so a commented-out command cannot name the loader.
+fn tokenize(text: &str, syntax: Syntax) -> Vec<String> {
+    let mut tokens = Vec::new();
+    for line in text.lines() {
+        let mut word = String::new();
+        let mut in_word = false;
+        let mut quote = None;
+        let mut escaped = false;
+        for char in line.chars() {
+            if escaped {
+                word.push(char);
+                escaped = false;
+                continue;
+            }
             match (quote, char) {
-                (None, '#') if word_start || syntax == Syntax::ArgFile => return &line[..index],
-                // Single quotes take backslashes literally in a shell.
-                (Some('\''), '\\') if syntax == Syntax::Shell => {}
-                (_, '\\') => escaped = true,
-                (None, '"' | '\'') => quote = Some(char),
                 (Some(open), _) if char == open => quote = None,
-                _ => {}
+                // Single quotes take backslashes literally in a shell, argument files do outside quotes.
+                (Some('\''), '\\') if syntax == Syntax::Shell => word.push(char),
+                (None, '\\') if syntax == Syntax::ArgFile => {
+                    word.push(char);
+                    in_word = true;
+                }
+                (_, '\\') => {
+                    escaped = true;
+                    in_word = true;
+                }
+                (Some(_), _) => word.push(char),
+                (None, '#') if !in_word || syntax == Syntax::ArgFile => break,
+                (None, '"' | '\'') => {
+                    quote = Some(char);
+                    in_word = true;
+                }
+                (None, _) if char.is_whitespace() => {
+                    if in_word {
+                        tokens.push(std::mem::take(&mut word));
+                        in_word = false;
+                    }
+                }
+                (None, _) => {
+                    word.push(char);
+                    in_word = true;
+                }
             }
         }
-        word_start = !literal && quote.is_none() && char.is_whitespace();
+        if in_word {
+            tokens.push(word);
+        }
     }
 
-    line
+    tokens
 }
 
 /// Reads the loader from Forge/NeoForge launch arguments: the `--fml.*` options of
 /// `unix_args.txt`, or the shim jar Forge 1.20.3+ starts.
 fn parse_loader_args(text: &str, syntax: Syntax) -> Option<LoaderArgs> {
-    let tokens: Vec<&str> = active_tokens(text, syntax).collect();
+    let tokens = tokenize(text, syntax);
     let option = |name: &str| {
         tokens
             .windows(2)
             .find(|pair| pair[0] == name)
-            .map(|pair| pair[1])
+            .map(|pair| pair[1].as_str())
             .filter(|value| mcjars::valid_version(value))
     };
 
@@ -225,9 +245,10 @@ fn parse_loader_args(text: &str, syntax: Syntax) -> Option<LoaderArgs> {
 }
 
 /// The arguments file a start script passes (`@libraries/.../unix_args.txt` in Forge's `run.sh`).
-fn referenced_args_file(text: &str) -> Option<&str> {
-    active_tokens(text, Syntax::Shell)
-        .filter_map(|token| token.trim_matches(['"', '\'']).strip_prefix('@'))
+fn referenced_args_file(text: &str) -> Option<String> {
+    tokenize(text, Syntax::Shell)
+        .into_iter()
+        .filter_map(|token| token.strip_prefix('@').map(str::to_string))
         .find(|path| {
             path.starts_with("libraries/") && path.ends_with("/unix_args.txt") && mcjars::safe_relative(path)
         })
@@ -246,7 +267,7 @@ async fn loader_args(client: &WingsClient, server: uuid::Uuid) -> Option<LoaderA
         let Some(referenced) = referenced_args_file(&text) else {
             continue;
         };
-        if let Some(content) = read_file(client, server, referenced, MAX_ARGS_SIZE).await
+        if let Some(content) = read_file(client, server, &referenced, MAX_ARGS_SIZE).await
             && let Some(args) = parse_loader_args(&String::from_utf8_lossy(&content), Syntax::ArgFile)
         {
             return Some(args);
@@ -437,6 +458,12 @@ mod tests {
             -Dmotd=\"a #b\"\n--fml.forgeVersion 47.4.2\n--fml.mcVersion 1.20.1\n";
         assert_eq!(parse_loader_args(argfile, Syntax::ArgFile), loader("FORGE", "1.20.1", "47.4.2"));
 
+        // Quotes are decoded before the versions and the shim name are read.
+        let quoted_values = "--fml.forgeVersion \"47.4.2\" --fml.mcVersion '1.20.1'";
+        assert_eq!(parse_loader_args(quoted_values, Syntax::ArgFile), loader("FORGE", "1.20.1", "47.4.2"));
+        let quoted_shim = "java -jar \"forge-1.21.10-60.1.0-shim.jar\" nogui";
+        assert_eq!(parse_loader_args(quoted_shim, Syntax::Shell), loader("FORGE", "1.21.10", "60.1.0"));
+
         assert_eq!(parse_loader_args("java -Xmx2G -jar server.jar nogui", Syntax::Shell), None);
         assert_eq!(
             parse_loader_args("--fml.forgeVersion ../x --fml.mcVersion 1.20.1", Syntax::ArgFile),
@@ -449,7 +476,7 @@ mod tests {
         let run_sh = "#!/usr/bin/env sh\n# Add custom JVM arguments to the user_jvm_args.txt\n\
             java @user_jvm_args.txt @libraries/net/minecraftforge/forge/1.20.1-47.4.2/unix_args.txt \"$@\"\n";
         assert_eq!(
-            referenced_args_file(run_sh),
+            referenced_args_file(run_sh).as_deref(),
             Some("libraries/net/minecraftforge/forge/1.20.1-47.4.2/unix_args.txt")
         );
         assert_eq!(referenced_args_file("java @libraries/../../etc/unix_args.txt"), None);
@@ -457,8 +484,9 @@ mod tests {
         assert_eq!(
             referenced_args_file(
                 "# java @libraries/net/minecraftforge/forge/1.20.1-47.2.0/unix_args.txt\n\
-                java @libraries/net/minecraftforge/forge/1.20.1-47.4.2/unix_args.txt \"$@\"\n"
-            ),
+                java \"@libraries/net/minecraftforge/forge/1.20.1-47.4.2/unix_args.txt\" \"$@\"\n"
+            )
+            .as_deref(),
             Some("libraries/net/minecraftforge/forge/1.20.1-47.4.2/unix_args.txt")
         );
     }
