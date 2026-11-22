@@ -141,10 +141,17 @@ async fn jar_sha256(client: &WingsClient, server: uuid::Uuid, jar: &str) -> Opti
         .find(|hash| hash.len() == 64 && hash.bytes().all(|byte| byte.is_ascii_hexdigit()))
 }
 
+/// The words of a launch arguments file or start script, without `#` comments, so a
+/// commented-out command cannot name the loader.
+fn active_tokens(text: &str) -> impl Iterator<Item = &str> {
+    text.lines()
+        .flat_map(|line| line.split_whitespace().take_while(|token| !token.starts_with('#')))
+}
+
 /// Reads the loader from Forge/NeoForge launch arguments: the `--fml.*` options of
 /// `unix_args.txt`, or the shim jar Forge 1.20.3+ starts.
 fn parse_loader_args(text: &str) -> Option<LoaderArgs> {
-    let tokens: Vec<&str> = text.split_whitespace().collect();
+    let tokens: Vec<&str> = active_tokens(text).collect();
     let option = |name: &str| {
         tokens
             .windows(2)
@@ -184,7 +191,7 @@ fn parse_loader_args(text: &str) -> Option<LoaderArgs> {
 
 /// The arguments file a start script passes (`@libraries/.../unix_args.txt` in Forge's `run.sh`).
 fn referenced_args_file(text: &str) -> Option<&str> {
-    text.split_whitespace()
+    active_tokens(text)
         .filter_map(|token| token.trim_matches(['"', '\'']).strip_prefix('@'))
         .find(|path| {
             path.starts_with("libraries/") && path.ends_with("/unix_args.txt") && mcjars::safe_relative(path)
@@ -378,6 +385,10 @@ mod tests {
         let shim = "-Djava.net.preferIPv6Addresses=system -jar forge-1.21.10-60.1.0-shim.jar\n";
         assert_eq!(parse_loader_args(shim), loader("FORGE", "1.21.10", "60.1.0"));
 
+        let commented = "# java -jar forge-1.20.4-49.0.1-shim.jar\n\
+            java -Xmx4G -jar forge-1.21.10-60.1.0-shim.jar nogui # was forge-1.21.9-59.0.1-shim.jar\n";
+        assert_eq!(parse_loader_args(commented), loader("FORGE", "1.21.10", "60.1.0"));
+
         assert_eq!(parse_loader_args("java -Xmx2G -jar server.jar nogui"), None);
         assert_eq!(parse_loader_args("--fml.forgeVersion ../x --fml.mcVersion 1.20.1"), None);
     }
@@ -392,5 +403,12 @@ mod tests {
         );
         assert_eq!(referenced_args_file("java @libraries/../../etc/unix_args.txt"), None);
         assert_eq!(referenced_args_file("java -jar server.jar"), None);
+        assert_eq!(
+            referenced_args_file(
+                "# java @libraries/net/minecraftforge/forge/1.20.1-47.2.0/unix_args.txt\n\
+                java @libraries/net/minecraftforge/forge/1.20.1-47.4.2/unix_args.txt \"$@\"\n"
+            ),
+            Some("libraries/net/minecraftforge/forge/1.20.1-47.4.2/unix_args.txt")
+        );
     }
 }
