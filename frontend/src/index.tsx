@@ -7,7 +7,7 @@ import { getExtTranslations } from './translations.ts';
 
 class CaloptreyxVersionChangerExtension extends Extension {
   public cardConfigurationPage: React.FC | null = AdminConfigurationPage;
-  public cardIcon: React.ReactNode = <FontAwesomeIcon icon={faCodeBranch} />;
+  public cardIcon = <FontAwesomeIcon icon={faCodeBranch} />;
 
   public initialize(ctx: ExtensionContext): void {
     ctx.extensionRegistry.enterRoutes((routes) =>
